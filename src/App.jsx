@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Dashboard from "./tabs/Dashboard";
 import Expense from "./tabs/Expense";
 import Storefront from "./tabs/Storefront";
@@ -12,8 +12,15 @@ const TABS = [
   { id: "stock",      icon: "📦", label: "สต็อก" },
 ];
 
+function fmtThaiDateTime(d) {
+  const day  = d.toLocaleDateString("th-TH", { day:"numeric", month:"short", year:"numeric" });
+  const time = d.toLocaleTimeString("th-TH", { hour:"2-digit", minute:"2-digit" });
+  return `${day} ${time}`;
+}
+
 export default function App() {
   const [tab, setTab] = useState("dashboard");
+  const loadedAt = useMemo(() => fmtThaiDateTime(new Date()), []);
   const cur = TABS.find(t => t.id === tab);
 
   return (
@@ -32,7 +39,7 @@ export default function App() {
             <span className="s-icon">{t.icon}</span>{t.label}
           </button>
         ))}
-        <div className="sidebar-footer">v2.8 · ระบบไก่จ๋า</div>
+        <div className="sidebar-footer">{loadedAt} · ไก่จ๋า</div>
       </nav>
 
       <div className="main-content">
