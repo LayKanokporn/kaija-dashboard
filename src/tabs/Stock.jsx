@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import Modal from "../components/Modal";
 
 const TYPE = {
   RECEIVE: { label:"รับเข้า",  icon:"📥", bg:"var(--green-bg)",  c:"var(--green)"  },
@@ -7,6 +8,7 @@ const TYPE = {
   WASTE:   { label:"เสียหาย", icon:"🗑",  bg:"var(--red-bg)",    c:"var(--red)"    },
   ADJUST:  { label:"ปรับยอด", icon:"🔧",  bg:"var(--blue-bg)",   c:"var(--blue)"   },
 };
+const EMPTY_FORM = { txDate:"", movementType:"RECEIVE", itemName:"", qty:"", unit:"", note:"" };
 
 export default function Stock() {
   const [rows, setRows]       = useState([]);
@@ -14,16 +16,46 @@ export default function Stock() {
   const [filter, setFilter]   = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState("");
+  const [modal, setModal]     = useState(null);
+  const [form, setForm]       = useState(EMPTY_FORM);
+  const [saving, setSaving]   = useState(false);
 
-  useEffect(() => {
+  const load = () => {
     setLoading(true);
-    api.stock(days).then(d=>setRows(d.rows||[])).catch(e=>setError(e.message)).finally(()=>setLoading(false));
-  }, [days]);
+    api.stock(days).then(d => setRows(d.rows||[])).catch(e => setError(e.message)).finally(() => setLoading(false));
+  };
+  useEffect(load, [days]);
 
   const recv  = rows.filter(r=>r.movementType==="RECEIVE").length;
   const issue = rows.filter(r=>r.movementType==="ISSUE").length;
   const waste = rows.filter(r=>r.movementType==="WASTE").length;
   const visible = rows.filter(r=>filter==="all"||r.movementType===filter).slice().reverse();
+
+  const openAdd = () => {
+    setForm({ ...EMPTY_FORM, txDate: new Date().toLocaleDateString("en-CA") });
+    setModal({ mode:"add" });
+  };
+  const openEdit = row => {
+    setForm({ txDate:row.date, movementType:row.movementType, itemName:row.itemName||"", qty:String(row.qty||""), unit:row.unit||"", note:row.note||"" });
+    setModal({ mode:"edit", row });
+  };
+  const handleSave = async () => {
+    if (!form.itemName) { alert("กรุณาใส่ชื่อสินค้า"); return; }
+    if (!form.qty || isNaN(+form.qty)) { alert("กรุณาใส่จำนวน"); return; }
+    setSaving(true);
+    try {
+      const p = { txDate:form.txDate, movementType:form.movementType, itemName:form.itemName, qty:form.qty, unit:form.unit, note:form.note };
+      if (modal.mode === "add") { await api.addStock(p); }
+      else { await api.updateStock({ ...p, rowIndex:modal.row.rowIndex }); }
+      setModal(null); load();
+    } catch(e) { alert("บันทึกไม่สำเร็จ: " + e.message); }
+    finally { setSaving(false); }
+  };
+  const handleDelete = async row => {
+    if (!confirm(`ลบ "${row.itemName}" ${row.qty} ${row.unit} ?`)) return;
+    try { await api.deleteStock(row.rowIndex); load(); }
+    catch(e) { alert("ลบไม่สำเร็จ: " + e.message); }
+  };
 
   if (loading) return <div className="loading"/>;
   if (error)   return <div className="err">❌ {error}</div>;
@@ -52,6 +84,7 @@ export default function Stock() {
         <select className="select-sm" style={{marginLeft:"auto"}} value={days} onChange={e=>setDays(+e.target.value)}>
           <option value={7}>7 วัน</option><option value={14}>14 วัน</option><option value={30}>30 วัน</option>
         </select>
+        <button className="btn-add" onClick={openAdd}>+ เพิ่ม</button>
       </div>
 
       <div className="tx-list">
@@ -63,17 +96,48 @@ export default function Stock() {
                   <div className="tx-avatar" style={{background:t.bg}}>{t.icon}</div>
                   <div className="tx-body">
                     <div className="tx-name">{r.itemName||"—"}</div>
-                    <div className="tx-meta">{t.label}{r.note?" · "+r.note:""}</div>
+                    <div className="tx-meta">{t.label} · {r.date}{r.note?" · "+r.note:""}</div>
                   </div>
                   <div className="tx-right">
                     <div className="tx-amount" style={{color:t.c}}>{r.qty} {r.unit}</div>
-                    <div className="tx-date">{r.date}</div>
+                  </div>
+                  <div className="tx-actions">
+                    <button className="btn-icon btn-edit" title="แก้ไข" onClick={()=>openEdit(r)}>✏</button>
+                    <button className="btn-icon btn-del"  title="ลบ"    onClick={()=>handleDelete(r)}>✕</button>
                   </div>
                 </div>
               );
             })
         }
       </div>
+
+      {modal && (
+        <Modal title={modal.mode==="add"?"เพิ่มรายการสต็อก":"แก้ไขรายการสต็อก"} onClose={()=>setModal(null)} onSave={handleSave} saving={saving}>
+          <div className="field"><label>วันที่</label>
+            <input type="date" value={form.txDate} onChange={e=>setForm({...form,txDate:e.target.value})} />
+          </div>
+          <div className="field"><label>ประเภท</label>
+            <select value={form.movementType} onChange={e=>setForm({...form,movementType:e.target.value})}>
+              <option value="RECEIVE">รับเข้า</option>
+              <option value="ISSUE">เบิกใช้</option>
+              <option value="WASTE">เสียหาย</option>
+              <option value="ADJUST">ปรับยอด</option>
+            </select>
+          </div>
+          <div className="field"><label>ชื่อสินค้า</label>
+            <input placeholder="เช่น แป้ง, เนย, น้ำตาล" value={form.itemName} onChange={e=>setForm({...form,itemName:e.target.value})} />
+          </div>
+          <div className="field"><label>จำนวน</label>
+            <input type="number" min="0" step="0.01" placeholder="0" value={form.qty} onChange={e=>setForm({...form,qty:e.target.value})} />
+          </div>
+          <div className="field"><label>หน่วย</label>
+            <input placeholder="กก., กล่อง, ชิ้น…" value={form.unit} onChange={e=>setForm({...form,unit:e.target.value})} />
+          </div>
+          <div className="field"><label>หมายเหตุ</label>
+            <input placeholder="หมายเหตุ (ถ้ามี)" value={form.note} onChange={e=>setForm({...form,note:e.target.value})} />
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
