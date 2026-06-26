@@ -104,10 +104,13 @@ body {
   font-weight: 600;
 }
 .s-icon { font-size: 0.95rem; width: 20px; text-align: center; }
-.sidebar-footer {
-  margin-top: auto; padding: 14px 12px 0;
+.sidebar-footer-row {
+  margin-top: auto; padding: 12px 12px 0;
   border-top: 1px solid var(--border);
-  font-size: 0.68rem; color: var(--gray-400);
+  display: flex; align-items: center; gap: 8px;
+}
+.sidebar-footer {
+  font-size: 0.68rem; color: var(--gray-400); flex: 1;
 }
 
 /* ── MAIN ───────────────────────────────────── */
@@ -142,13 +145,18 @@ body {
 }
 .nav-item {
   flex: 1; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 3px;
+  align-items: center; justify-content: center; gap: 2px;
   border: none; background: none; cursor: pointer;
   font-size: 0.6rem; color: var(--gray-400);
-  transition: color .15s;
+  transition: color .15s; position: relative;
 }
 .nav-item.active { color: var(--brand); }
 .nav-icon { font-size: 1.25rem; }
+.nav-dot {
+  width: 4px; height: 4px; border-radius: 50%;
+  background: var(--brand);
+  position: absolute; bottom: 4px;
+}
 
 /* ── PAGE ───────────────────────────────────── */
 .page { padding: 16px; }
@@ -390,28 +398,56 @@ body {
 .sec-title { font-weight:600; font-size:0.9rem; color:var(--gray-700); flex:1; }
 .btn-add {
   display:flex; align-items:center; gap:4px;
-  padding:6px 12px; border-radius:8px; border:none;
+  padding:6px 14px; border-radius:20px; border:none;
   background:var(--brand); color:#fff; font-size:0.78rem; font-weight:600;
-  cursor:pointer; transition:opacity 0.15s;
+  cursor:pointer; transition:opacity 0.15s; white-space:nowrap;
 }
 .btn-add:hover { opacity:0.85; }
 
+/* tx-actions: always visible on touch, hover on desktop */
 .tx-item { position:relative; }
 .tx-actions {
-  display:none; position:absolute; right:0; top:50%; transform:translateY(-50%);
-  gap:4px; align-items:center; background:var(--surface);
-  padding:0 4px; border-radius:6px; box-shadow:0 1px 4px rgba(0,0,0,0.08);
+  display:flex; gap:4px; align-items:center;
+  flex-shrink:0; margin-left:4px;
 }
-.tx-item:hover .tx-actions { display:flex; }
 .btn-icon {
-  width:26px; height:26px; border:none; border-radius:6px;
-  cursor:pointer; font-size:0.8rem; display:flex; align-items:center; justify-content:center;
-  transition:background 0.15s;
+  width:30px; height:30px; border:none; border-radius:8px;
+  cursor:pointer; font-size:0.82rem; display:flex; align-items:center; justify-content:center;
+  transition:background 0.15s; opacity:0.5;
 }
+.tx-item:hover .btn-icon { opacity:1; }
+.btn-icon:hover { opacity:1 !important; }
 .btn-edit { background:var(--blue-bg); color:var(--blue); }
 .btn-edit:hover { background:#DBEAFE; }
 .btn-del  { background:var(--red-bg);  color:var(--red);  }
 .btn-del:hover  { background:#FEE2E2; }
+/* touch devices — always full opacity */
+@media (hover:none) { .btn-icon { opacity:1; } }
+
+/* ── REFRESH BUTTON ─────────────────────────── */
+.btn-refresh {
+  width:34px; height:34px; border:1.5px solid var(--border); border-radius:9px;
+  background:var(--surface); color:var(--gray-500); font-size:0.9rem;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; transition:all .15s; flex-shrink:0;
+}
+.btn-refresh:hover { border-color:var(--brand); color:var(--brand); background:var(--brand-light); }
+.btn-refresh.spinning { animation:spin .7s linear infinite; pointer-events:none; }
+
+/* ── SKELETON LOADER ────────────────────────── */
+.skeleton {
+  background: linear-gradient(90deg, var(--gray-100) 25%, var(--gray-50) 50%, var(--gray-100) 75%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: 8px;
+}
+@keyframes shimmer { 0%{background-position:100% 0} 100%{background-position:-100% 0} }
+.sk-hero { height:130px; border-radius:var(--r-lg); margin-bottom:14px; }
+.sk-row { display:flex; gap:10px; margin-bottom:14px; }
+.sk-card { flex:1; height:80px; border-radius:var(--r); }
+.sk-list { border-radius:var(--r); overflow:hidden; }
+.sk-item { height:62px; margin-bottom:1px; }
+.sk-item:last-child { margin-bottom:0; }
 
 /* ── MODAL ──────────────────────────────────── */
 .modal-backdrop {

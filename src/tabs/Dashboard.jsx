@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useContext } from "react";
 import { api } from "../api";
+import { RefreshCtx } from "../App";
 
 const RANKS  = ["🥇","🥈","🥉","4️⃣","5️⃣"];
 const WD     = ["อา","จ","อ","พ","พฤ","ศ","ส"];
@@ -31,7 +32,23 @@ function StatusTag({ found, status, label }) {
   return <span className={`hero-tag ${cls}`}>{label} {txt}</span>;
 }
 
+function Skeleton() {
+  return (
+    <div>
+      <div className="skeleton sk-hero" />
+      <div className="sk-row">
+        <div className="skeleton sk-card" /><div className="skeleton sk-card" /><div className="skeleton sk-card" />
+      </div>
+      <div className="skeleton sk-card" style={{height:200,marginBottom:14}} />
+      <div className="sk-list">
+        {[1,2,3,4].map(i=><div key={i} className="skeleton sk-item" />)}
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
+  const { key } = useContext(RefreshCtx);
   const [dash, setDash]       = useState(null);
   const [lb, setLb]           = useState([]);
   const [expRows, setExpRows] = useState([]);
@@ -39,14 +56,15 @@ export default function Dashboard() {
   const [error, setError]     = useState("");
 
   useEffect(() => {
+    setLoading(true);
     api.batch(30)
       .then(b => { setDash(b.dashboard); setLb(b.leaderboard?.leaderboard||[]); setExpRows(b.expense?.rows||[]); })
       .catch(ex => setError(ex.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [key]);
 
-  if (loading) return <div className="loading" />;
-  if (error)   return <div className="err">❌ {error}</div>;
+  if (loading) return <Skeleton />;
+  if (error)   return <div className="err">❌ {error} <button className="btn-ghost" style={{marginTop:8}} onClick={()=>window.location.reload()}>ลองใหม่</button></div>;
 
   const { storefront:sf, daily:dl, stock:stk } = dash;
   const { cells, map, today, month } = buildCal(expRows);

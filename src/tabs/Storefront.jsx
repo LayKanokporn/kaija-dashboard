@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useContext } from "react";
 import { api } from "../api";
 import Modal from "../components/Modal";
+import { RefreshCtx } from "../App";
 
 const fmt = n => (+(n||0)).toLocaleString();
 const EMPTY_FORM = { txDate:"", cashForward:"0", cashIncome:"0", cashExpense:"0", transferIncome:"0" };
@@ -14,11 +15,12 @@ export default function Storefront() {
   const [form, setForm]       = useState(EMPTY_FORM);
   const [saving, setSaving]   = useState(false);
 
+  const { key } = useContext(RefreshCtx);
   const load = () => {
     setLoading(true);
     api.storefront(days).then(d => setRows(d.rows||[])).catch(e => setError(e.message)).finally(() => setLoading(false));
   };
-  useEffect(load, [days]);
+  useEffect(load, [days, key]);
 
   const totSales    = rows.reduce((s,r)=>s+(r.totalSales||0),0);
   const totTransfer = rows.reduce((s,r)=>s+(r.transferIncome||0),0);

@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useContext } from "react";
 import { api } from "../api";
 import Modal from "../components/Modal";
+import { RefreshCtx } from "../App";
 
 const TYPE = {
   RECEIVE: { label:"รับเข้า",  icon:"📥", bg:"var(--green-bg)",  c:"var(--green)"  },
@@ -20,11 +21,12 @@ export default function Stock() {
   const [form, setForm]       = useState(EMPTY_FORM);
   const [saving, setSaving]   = useState(false);
 
+  const { key } = useContext(RefreshCtx);
   const load = () => {
     setLoading(true);
     api.stock(days).then(d => setRows(d.rows||[])).catch(e => setError(e.message)).finally(() => setLoading(false));
   };
-  useEffect(load, [days]);
+  useEffect(load, [days, key]);
 
   const recv  = rows.filter(r=>r.movementType==="RECEIVE").length;
   const issue = rows.filter(r=>r.movementType==="ISSUE").length;
