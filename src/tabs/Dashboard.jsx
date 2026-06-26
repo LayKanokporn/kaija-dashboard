@@ -39,8 +39,8 @@ export default function Dashboard() {
   const [error, setError]     = useState("");
 
   useEffect(() => {
-    Promise.all([api.dashboard(), api.leaderboard(), api.expense(30)])
-      .then(([d,l,e]) => { setDash(d); setLb(l.leaderboard||[]); setExpRows(e.rows||[]); })
+    api.batch(30)
+      .then(b => { setDash(b.dashboard); setLb(b.leaderboard?.leaderboard||[]); setExpRows(b.expense?.rows||[]); })
       .catch(ex => setError(ex.message))
       .finally(() => setLoading(false));
   }, []);
