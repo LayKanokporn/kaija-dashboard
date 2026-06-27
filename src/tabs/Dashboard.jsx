@@ -1,11 +1,9 @@
-import { useEffect, useState, useContext } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
-import { RefreshCtx } from "../App";
 
 const RANKS  = ["🥇","🥈","🥉","4️⃣","5️⃣"];
 const WD     = ["อา","จ","อ","พ","พฤ","ศ","ส"];
 const MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
-
 const fmt = n => (+(n||0)).toLocaleString();
 
 function buildCal(rows) {
@@ -48,24 +46,22 @@ function Skeleton() {
 }
 
 export default function Dashboard() {
-  const { key } = useContext(RefreshCtx);
-  const [dash, setDash]       = useState(null);
-  const [lb, setLb]           = useState([]);
-  const [expRows, setExpRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState("");
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['batch', 30],
+    queryFn: () => api.batch(30),
+  });
 
-  useEffect(() => {
-    setLoading(true);
-    api.batch(30)
-      .then(b => { setDash(b.dashboard); setLb(b.leaderboard?.leaderboard||[]); setExpRows(b.expense?.rows||[]); })
-      .catch(ex => setError(ex.message))
-      .finally(() => setLoading(false));
-  }, [key]);
+  if (isLoading) return <Skeleton />;
+  if (error) return (
+    <div className="err">
+      ❌ {error.message}
+      <button className="btn-ghost" style={{marginTop:8}} onClick={()=>window.location.reload()}>ลองใหม่</button>
+    </div>
+  );
 
-  if (loading) return <Skeleton />;
-  if (error)   return <div className="err">❌ {error} <button className="btn-ghost" style={{marginTop:8}} onClick={()=>window.location.reload()}>ลองใหม่</button></div>;
-
+  const { dashboard: dash, leaderboard: lb_data, expense: exp_data } = data;
+  const lb      = lb_data?.leaderboard || [];
+  const expRows = exp_data?.rows || [];
   const { storefront:sf, daily:dl, stock:stk } = dash;
   const { cells, map, today, month } = buildCal(expRows);
   const recent = expRows.slice(-6).reverse();

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -28,7 +28,7 @@
   --surface: #FFFFFF;
   --border:  #E2E8F0;
 
-  --font: 'Inter', 'Sarabun', sans-serif;
+  --font: 'Sarabun', 'Inter', sans-serif;
   --sidebar-w: 236px;
   --nav-h: 66px;
   --r: 12px;
@@ -433,6 +433,19 @@ body {
 }
 .btn-refresh:hover { border-color:var(--brand); color:var(--brand); background:var(--brand-light); }
 .btn-refresh.spinning { animation:spin .7s linear infinite; pointer-events:none; }
+
+/* ── FETCH PROGRESS BAR ─────────────────────── */
+.fetch-bar {
+  position: fixed; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--brand); z-index: 200;
+  animation: fetch-slide 1.8s ease-in-out infinite;
+  transform-origin: left;
+}
+@keyframes fetch-slide {
+  0%   { transform: scaleX(0); opacity: 1; }
+  60%  { transform: scaleX(0.8); opacity: 1; }
+  100% { transform: scaleX(1); opacity: 0; }
+}
 
 /* ── SKELETON LOADER ────────────────────────── */
 .skeleton {

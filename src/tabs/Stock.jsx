@@ -1,7 +1,7 @@
-import { useEffect, useState, useContext } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import Modal from "../components/Modal";
-import { RefreshCtx } from "../App";
 
 const TYPE = {
   RECEIVE: { label:"รับเข้า",  icon:"📥", bg:"var(--green-bg)",  c:"var(--green)"  },
@@ -12,21 +12,23 @@ const TYPE = {
 const EMPTY_FORM = { txDate:"", movementType:"RECEIVE", itemName:"", qty:"", unit:"", note:"" };
 
 export default function Stock() {
-  const [rows, setRows]       = useState([]);
-  const [days, setDays]       = useState(7);
-  const [filter, setFilter]   = useState("all");
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState("");
-  const [modal, setModal]     = useState(null);
-  const [form, setForm]       = useState(EMPTY_FORM);
-  const [saving, setSaving]   = useState(false);
+  const qc = useQueryClient();
+  const [days, setDays]     = useState(7);
+  const [filter, setFilter] = useState("all");
+  const [modal, setModal]   = useState(null);
+  const [form, setForm]     = useState(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
 
-  const { key } = useContext(RefreshCtx);
-  const load = () => {
-    setLoading(true);
-    api.stock(days).then(d => setRows(d.rows||[])).catch(e => setError(e.message)).finally(() => setLoading(false));
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['stock', days],
+    queryFn: () => api.stock(days),
+  });
+  const rows = data?.rows || [];
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['stock'] });
+    qc.invalidateQueries({ queryKey: ['batch'] });
   };
-  useEffect(load, [days, key]);
 
   const recv  = rows.filter(r=>r.movementType==="RECEIVE").length;
   const issue = rows.filter(r=>r.movementType==="ISSUE").length;
@@ -49,18 +51,19 @@ export default function Stock() {
       const p = { txDate:form.txDate, movementType:form.movementType, itemName:form.itemName, qty:form.qty, unit:form.unit, note:form.note };
       if (modal.mode === "add") { await api.addStock(p); }
       else { await api.updateStock({ ...p, rowIndex:modal.row.rowIndex }); }
-      setModal(null); load();
+      setModal(null);
+      invalidate();
     } catch(e) { alert("บันทึกไม่สำเร็จ: " + e.message); }
     finally { setSaving(false); }
   };
   const handleDelete = async row => {
     if (!confirm(`ลบ "${row.itemName}" ${row.qty} ${row.unit} ?`)) return;
-    try { await api.deleteStock(row.rowIndex); load(); }
+    try { await api.deleteStock(row.rowIndex); invalidate(); }
     catch(e) { alert("ลบไม่สำเร็จ: " + e.message); }
   };
 
-  if (loading) return <div className="loading"/>;
-  if (error)   return <div className="err">❌ {error}</div>;
+  if (isLoading) return <div className="loading"/>;
+  if (error)     return <div className="err">❌ {error.message}</div>;
 
   return (
     <div>

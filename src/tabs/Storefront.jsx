@@ -1,26 +1,28 @@
-import { useEffect, useState, useContext } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import Modal from "../components/Modal";
-import { RefreshCtx } from "../App";
 
 const fmt = n => (+(n||0)).toLocaleString();
 const EMPTY_FORM = { txDate:"", cashForward:"0", cashIncome:"0", cashExpense:"0", transferIncome:"0" };
 
 export default function Storefront() {
-  const [rows, setRows]       = useState([]);
-  const [days, setDays]       = useState(7);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState("");
-  const [modal, setModal]     = useState(null);
-  const [form, setForm]       = useState(EMPTY_FORM);
-  const [saving, setSaving]   = useState(false);
+  const qc = useQueryClient();
+  const [days, setDays]     = useState(7);
+  const [modal, setModal]   = useState(null);
+  const [form, setForm]     = useState(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
 
-  const { key } = useContext(RefreshCtx);
-  const load = () => {
-    setLoading(true);
-    api.storefront(days).then(d => setRows(d.rows||[])).catch(e => setError(e.message)).finally(() => setLoading(false));
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['storefront', days],
+    queryFn: () => api.storefront(days),
+  });
+  const rows = data?.rows || [];
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['storefront'] });
+    qc.invalidateQueries({ queryKey: ['batch'] });
   };
-  useEffect(load, [days, key]);
 
   const totSales    = rows.reduce((s,r)=>s+(r.totalSales||0),0);
   const totTransfer = rows.reduce((s,r)=>s+(r.transferIncome||0),0);
@@ -43,18 +45,19 @@ export default function Storefront() {
       const p = { txDate:form.txDate, cashForward:cf, cashIncome:ci, cashExpense:ce, transferIncome:ti, cashBalance:cf+ci-ce, totalSales:ci+ti };
       if (modal.mode === "add") { await api.addStorefront(p); }
       else { await api.updateStorefront({ ...p, rowIndex:modal.row.rowIndex }); }
-      setModal(null); load();
+      setModal(null);
+      invalidate();
     } catch(e) { alert("บันทึกไม่สำเร็จ: " + e.message); }
     finally { setSaving(false); }
   };
   const handleDelete = async row => {
     if (!confirm(`ลบข้อมูลหน้าร้านวันที่ ${row.date} ?`)) return;
-    try { await api.deleteStorefront(row.rowIndex); load(); }
+    try { await api.deleteStorefront(row.rowIndex); invalidate(); }
     catch(e) { alert("ลบไม่สำเร็จ: " + e.message); }
   };
 
-  if (loading) return <div className="loading"/>;
-  if (error)   return <div className="err">❌ {error}</div>;
+  if (isLoading) return <div className="loading"/>;
+  if (error)     return <div className="err">❌ {error.message}</div>;
 
   return (
     <div>
