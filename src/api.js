@@ -49,4 +49,7 @@ export const api = {
   addStock:    (p)          => fetchGAS("addStock",    p),
   updateStock: (p)          => fetchGAS("updateStock", p),
   deleteStock: (rowIndex)   => fetchGAS("deleteStock", { rowIndex }),
+
+  // TEAM
+  renameMember: (uid, name) => fetchGAS("renameMember", { uid, name }),
 };

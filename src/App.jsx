@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider, useQueryClient, useIsFetching } from "@tanstack/react-query";
+import { ToastProvider } from "./components/Toast";
 import Dashboard from "./tabs/Dashboard";
 import "./App.css";
 
@@ -129,7 +130,9 @@ function AppInner() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AppInner />
+      <ToastProvider>
+        <AppInner />
+      </ToastProvider>
     </QueryClientProvider>
   );
 }

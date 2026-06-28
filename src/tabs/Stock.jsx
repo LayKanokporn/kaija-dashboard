@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import Modal from "../components/Modal";
+import ConfirmDialog from "../components/ConfirmDialog";
+import { useToast } from "../components/Toast";
 
 const TYPE = {
   RECEIVE: { label:"รับเข้า",  icon:"📥", bg:"var(--green-bg)",  c:"var(--green)"  },
@@ -13,11 +15,13 @@ const EMPTY_FORM = { txDate:"", movementType:"RECEIVE", itemName:"", qty:"", uni
 
 export default function Stock() {
   const qc = useQueryClient();
-  const [days, setDays]     = useState(7);
-  const [filter, setFilter] = useState("all");
-  const [modal, setModal]   = useState(null);
-  const [form, setForm]     = useState(EMPTY_FORM);
-  const [saving, setSaving] = useState(false);
+  const toast = useToast();
+  const [days, setDays]       = useState(7);
+  const [filter, setFilter]   = useState("all");
+  const [modal, setModal]     = useState(null);
+  const [form, setForm]       = useState(EMPTY_FORM);
+  const [saving, setSaving]   = useState(false);
+  const [deleting, setDeleting] = useState(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['stock', days],
@@ -44,25 +48,26 @@ export default function Stock() {
     setModal({ mode:"edit", row });
   };
   const handleSave = async () => {
-    if (!form.itemName) { alert("กรุณาใส่ชื่อสินค้า"); return; }
-    if (!form.qty || isNaN(+form.qty)) { alert("กรุณาใส่จำนวน"); return; }
+    if (!form.itemName) { toast.error("กรุณาใส่ชื่อสินค้า"); return; }
+    if (!form.qty || isNaN(+form.qty)) { toast.error("กรุณาใส่จำนวน"); return; }
     setSaving(true);
     try {
       const p = { txDate:form.txDate, movementType:form.movementType, itemName:form.itemName, qty:form.qty, unit:form.unit, note:form.note };
-      if (modal.mode === "add") { await api.addStock(p); }
-      else { await api.updateStock({ ...p, rowIndex:modal.row.rowIndex }); }
+      if (modal.mode === "add") { await api.addStock(p); toast.success("เพิ่มรายการสำเร็จ"); }
+      else { await api.updateStock({ ...p, rowIndex:modal.row.rowIndex }); toast.success("แก้ไขสำเร็จ"); }
       setModal(null);
       invalidate();
-    } catch(e) { alert("บันทึกไม่สำเร็จ: " + e.message); }
+    } catch(e) { toast.error("บันทึกไม่สำเร็จ: " + e.message); }
     finally { setSaving(false); }
   };
-  const handleDelete = async row => {
-    if (!confirm(`ลบ "${row.itemName}" ${row.qty} ${row.unit} ?`)) return;
-    try { await api.deleteStock(row.rowIndex); invalidate(); }
-    catch(e) { alert("ลบไม่สำเร็จ: " + e.message); }
+  const confirmDelete = async () => {
+    const row = deleting;
+    try { await api.deleteStock(row.rowIndex); invalidate(); toast.success("ลบสำเร็จ"); }
+    catch(e) { toast.error("ลบไม่สำเร็จ: " + e.message); }
+    finally { setDeleting(null); }
   };
 
-  if (isLoading) return <div className="loading"/>;
+  if (isLoading) return <div><div className="sk-row"><div className="skeleton sk-card" /><div className="skeleton sk-card" /><div className="skeleton sk-card" /></div><div className="sk-list">{[1,2,3,4].map(i=><div key={i} className="skeleton sk-item" />)}</div></div>;
   if (error)     return <div className="err">❌ {error.message}</div>;
 
   return (
@@ -108,13 +113,22 @@ export default function Stock() {
                   </div>
                   <div className="tx-actions">
                     <button className="btn-icon btn-edit" title="แก้ไข" onClick={()=>openEdit(r)}>✏</button>
-                    <button className="btn-icon btn-del"  title="ลบ"    onClick={()=>handleDelete(r)}>✕</button>
+                    <button className="btn-icon btn-del"  title="ลบ"    onClick={()=>setDeleting(r)}>✕</button>
                   </div>
                 </div>
               );
             })
         }
       </div>
+
+      {deleting && (
+        <ConfirmDialog
+          title="ยืนยันการลบ"
+          message={`ลบ "${deleting.itemName}" ${deleting.qty} ${deleting.unit} ?`}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleting(null)}
+        />
+      )}
 
       {modal && (
         <Modal title={modal.mode==="add"?"เพิ่มรายการสต็อก":"แก้ไขรายการสต็อก"} onClose={()=>setModal(null)} onSave={handleSave} saving={saving}>

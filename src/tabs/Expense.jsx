@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import Modal from "../components/Modal";
+import ConfirmDialog from "../components/ConfirmDialog";
+import { useToast } from "../components/Toast";
 
 const fmt = n => (+(n||0)).toLocaleString();
 const CAT_ICON = {"วัตถุดิบ":"🥕","ค่าเดินทาง":"🚗","พัสดุ":"📦","สาธารณูปโภค":"💡","อาหาร":"🍱","สินค้า":"🛍","รายรับ":"💚","อื่นๆ":"📋"};
@@ -9,13 +11,31 @@ const icon = cat => { for(const k of Object.keys(CAT_ICON)) if(cat?.includes(k))
 const CATS = ["วัตถุดิบ","ค่าเดินทาง","พัสดุ","สาธารณูปโภค","อาหาร","สินค้า","อื่นๆ"];
 const EMPTY_FORM = { txDate:"", type:"EXPENSE", category:"อื่นๆ", itemName:"", amount:"", note:"" };
 
+function groupByDate(rows) {
+  const groups = {};
+  rows.forEach(r => {
+    const d = r.date || "ไม่ระบุวัน";
+    if (!groups[d]) groups[d] = [];
+    groups[d].push(r);
+  });
+  return Object.entries(groups).sort((a,b) => {
+    const [da, db] = [a[0], b[0]];
+    const pa = da.split("/").reverse().join(""), pb = db.split("/").reverse().join("");
+    return pb.localeCompare(pa);
+  });
+}
+
 export default function Expense() {
   const qc = useQueryClient();
-  const [days, setDays]     = useState(7);
-  const [filter, setFilter] = useState("all");
-  const [modal, setModal]   = useState(null);
-  const [form, setForm]     = useState(EMPTY_FORM);
-  const [saving, setSaving] = useState(false);
+  const toast = useToast();
+  const [days, setDays]       = useState(7);
+  const [filter, setFilter]   = useState("all");
+  const [modal, setModal]     = useState(null);
+  const [form, setForm]       = useState(EMPTY_FORM);
+  const [saving, setSaving]   = useState(false);
+  const [deleting, setDeleting] = useState(null);
+  const [expanded, setExpanded] = useState(new Set());
+  const [catEdit, setCatEdit]   = useState(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['expense', days],
@@ -31,7 +51,24 @@ export default function Expense() {
   const inc = rows.filter(r=>r.type==="INCOME").reduce((s,r)=>s+r.amount,0);
   const exp = rows.filter(r=>r.type==="EXPENSE").reduce((s,r)=>s+r.amount,0);
   const net = inc - exp;
-  const visible = rows.filter(r=>filter==="all"||(filter==="income"?r.type==="INCOME":r.type==="EXPENSE")).slice().reverse();
+  const visible = rows.filter(r=>filter==="all"||(filter==="income"?r.type==="INCOME":r.type==="EXPENSE"));
+
+  const grouped = useMemo(() => groupByDate(visible), [visible]);
+
+  // เปิดวันแรก (ล่าสุด) อัตโนมัติ
+  useMemo(() => {
+    if (grouped.length > 0 && expanded.size === 0) {
+      setExpanded(new Set([grouped[0][0]]));
+    }
+  }, [grouped.length]);
+
+  const toggleDate = (date) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      next.has(date) ? next.delete(date) : next.add(date);
+      return next;
+    });
+  };
 
   const openAdd = () => {
     setForm({ ...EMPTY_FORM, txDate: new Date().toLocaleDateString("en-CA") });
@@ -42,26 +79,38 @@ export default function Expense() {
     setModal({ mode:"edit", row });
   };
   const handleSave = async () => {
-    if (!form.amount || isNaN(+form.amount)) { alert("กรุณาใส่จำนวนเงิน"); return; }
+    if (!form.amount || isNaN(+form.amount)) { toast.error("กรุณาใส่จำนวนเงิน"); return; }
     setSaving(true);
     try {
       if (modal.mode === "add") {
         await api.addExpense({ txDate:form.txDate, type:form.type, category:form.category, itemName:form.itemName||form.category, amount:form.amount, note:form.note });
+        toast.success("เพิ่มรายการสำเร็จ");
       } else {
         await api.updateExpense({ rowIndex:modal.row.rowIndex, txDate:form.txDate, type:form.type, category:form.category, itemName:form.itemName, amount:form.amount, note:form.note });
+        toast.success("แก้ไขสำเร็จ");
       }
       setModal(null);
       invalidate();
-    } catch(e) { alert("บันทึกไม่สำเร็จ: " + e.message); }
+    } catch(e) { toast.error("บันทึกไม่สำเร็จ: " + e.message); }
     finally { setSaving(false); }
   };
-  const handleDelete = async row => {
-    if (!confirm(`ลบ "${row.itemName||row.category}" ${fmt(row.amount)} ฿ ?`)) return;
-    try { await api.deleteExpense(row.rowIndex); invalidate(); }
-    catch(e) { alert("ลบไม่สำเร็จ: " + e.message); }
+  const confirmDelete = async () => {
+    const row = deleting;
+    try { await api.deleteExpense(row.rowIndex); invalidate(); toast.success("ลบสำเร็จ"); }
+    catch(e) { toast.error("ลบไม่สำเร็จ: " + e.message); }
+    finally { setDeleting(null); }
+  };
+  const handleCatChange = async (row, newCat) => {
+    setCatEdit(null);
+    if (newCat === row.category) return;
+    try {
+      await api.updateExpense({ rowIndex: row.rowIndex, category: newCat });
+      toast.success("เปลี่ยนหมวดหมู่สำเร็จ");
+      invalidate();
+    } catch (e) { toast.error("เปลี่ยนหมวดหมู่ไม่สำเร็จ: " + e.message); }
   };
 
-  if (isLoading) return <div className="loading"/>;
+  if (isLoading) return <div><div className="skeleton sk-hero" /><div className="sk-row"><div className="skeleton sk-card" /><div className="skeleton sk-card" /><div className="skeleton sk-card" /></div><div className="sk-list">{[1,2,3,4].map(i=><div key={i} className="skeleton sk-item" />)}</div></div>;
   if (error)     return <div className="err">❌ {error.message}</div>;
 
   return (
@@ -98,30 +147,69 @@ export default function Expense() {
         <button className="btn-add" onClick={openAdd}>+ เพิ่ม</button>
       </div>
 
-      <div className="tx-list">
-        {visible.length===0 ? <div className="empty">ไม่มีข้อมูล</div>
-          : visible.map((r,i)=>(
-            <div key={i} className="tx-item">
-              <div className="tx-avatar" style={{background:r.type==="INCOME"?"var(--green-bg)":"var(--red-bg)"}}>
-                {icon(r.category)}
+      {/* Grouped by date */}
+      {grouped.length === 0
+        ? <div className="tx-list"><div className="empty">ไม่มีข้อมูล</div></div>
+        : grouped.map(([date, items]) => {
+            const dayExp = items.filter(r=>r.type==="EXPENSE").reduce((s,r)=>s+r.amount,0);
+            const dayInc = items.filter(r=>r.type==="INCOME").reduce((s,r)=>s+r.amount,0);
+            const isOpen = expanded.has(date);
+            return (
+              <div key={date} className="day-group">
+                <button className="day-header" onClick={() => toggleDate(date)}>
+                  <span className="day-date">{date}</span>
+                  <span className="day-summary">
+                    {dayExp > 0 && <span className="c-red">-{fmt(dayExp)}</span>}
+                    {dayInc > 0 && <span className="c-green">+{fmt(dayInc)}</span>}
+                    <span className="day-count">{items.length} รายการ</span>
+                  </span>
+                  <span className={"day-arrow" + (isOpen ? " open" : "")}>▸</span>
+                </button>
+                {isOpen && (
+                  <div className="tx-list" style={{marginBottom:0}}>
+                    {items.map((r,i)=>(
+                      <div key={i} className="tx-item">
+                        <div className="tx-avatar" style={{background:r.type==="INCOME"?"var(--green-bg)":"var(--red-bg)"}}>
+                          {icon(r.category)}
+                        </div>
+                        <div className="tx-body">
+                          <div className="tx-name">{r.itemName||r.note||r.category||"รายการ"}</div>
+                          {catEdit === r.rowIndex ? (
+                            <select className="cat-inline-select" autoFocus value={r.category}
+                              onChange={e => handleCatChange(r, e.target.value)}
+                              onBlur={() => setCatEdit(null)}>
+                              {CATS.map(c=><option key={c} value={c}>{c}</option>)}
+                            </select>
+                          ) : (
+                            <div className="tx-meta tx-cat-click" onClick={e=>{e.stopPropagation(); setCatEdit(r.rowIndex);}}>{r.category} ✏</div>
+                          )}
+                        </div>
+                        <div className="tx-right">
+                          <div className="tx-amount" style={{color:r.type==="INCOME"?"var(--green)":"var(--red)"}}>
+                            {r.type==="INCOME"?"+":"-"}{fmt(r.amount)} ฿
+                          </div>
+                        </div>
+                        <div className="tx-actions">
+                          <button className="btn-icon btn-edit" title="แก้ไข" onClick={()=>openEdit(r)}>✏</button>
+                          <button className="btn-icon btn-del"  title="ลบ"    onClick={()=>setDeleting(r)}>✕</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="tx-body">
-                <div className="tx-name">{r.itemName||r.note||r.category||"รายการ"}</div>
-                <div className="tx-meta">{r.category} · {r.date}</div>
-              </div>
-              <div className="tx-right">
-                <div className="tx-amount" style={{color:r.type==="INCOME"?"var(--green)":"var(--red)"}}>
-                  {r.type==="INCOME"?"+":"-"}{fmt(r.amount)} ฿
-                </div>
-              </div>
-              <div className="tx-actions">
-                <button className="btn-icon btn-edit" title="แก้ไข" onClick={()=>openEdit(r)}>✏</button>
-                <button className="btn-icon btn-del"  title="ลบ"    onClick={()=>handleDelete(r)}>✕</button>
-              </div>
-            </div>
-          ))
-        }
-      </div>
+            );
+          })
+      }
+
+      {deleting && (
+        <ConfirmDialog
+          title="ยืนยันการลบ"
+          message={`ลบ "${deleting.itemName||deleting.category}" ${fmt(deleting.amount)} ฿ ?`}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleting(null)}
+        />
+      )}
 
       {modal && (
         <Modal title={modal.mode==="add"?"เพิ่มรายการ":"แก้ไขรายการ"} onClose={()=>setModal(null)} onSave={handleSave} saving={saving}>

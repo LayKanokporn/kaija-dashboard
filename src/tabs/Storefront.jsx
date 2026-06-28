@@ -2,16 +2,20 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import Modal from "../components/Modal";
+import ConfirmDialog from "../components/ConfirmDialog";
+import { useToast } from "../components/Toast";
 
 const fmt = n => (+(n||0)).toLocaleString();
 const EMPTY_FORM = { txDate:"", cashForward:"0", cashIncome:"0", cashExpense:"0", transferIncome:"0" };
 
 export default function Storefront() {
   const qc = useQueryClient();
-  const [days, setDays]     = useState(7);
-  const [modal, setModal]   = useState(null);
-  const [form, setForm]     = useState(EMPTY_FORM);
-  const [saving, setSaving] = useState(false);
+  const toast = useToast();
+  const [days, setDays]       = useState(7);
+  const [modal, setModal]     = useState(null);
+  const [form, setForm]       = useState(EMPTY_FORM);
+  const [saving, setSaving]   = useState(false);
+  const [deleting, setDeleting] = useState(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['storefront', days],
@@ -43,20 +47,21 @@ export default function Storefront() {
     const ce = parseFloat(form.cashExpense)||0, ti = parseFloat(form.transferIncome)||0;
     try {
       const p = { txDate:form.txDate, cashForward:cf, cashIncome:ci, cashExpense:ce, transferIncome:ti, cashBalance:cf+ci-ce, totalSales:ci+ti };
-      if (modal.mode === "add") { await api.addStorefront(p); }
-      else { await api.updateStorefront({ ...p, rowIndex:modal.row.rowIndex }); }
+      if (modal.mode === "add") { await api.addStorefront(p); toast.success("เพิ่มข้อมูลสำเร็จ"); }
+      else { await api.updateStorefront({ ...p, rowIndex:modal.row.rowIndex }); toast.success("แก้ไขสำเร็จ"); }
       setModal(null);
       invalidate();
-    } catch(e) { alert("บันทึกไม่สำเร็จ: " + e.message); }
+    } catch(e) { toast.error("บันทึกไม่สำเร็จ: " + e.message); }
     finally { setSaving(false); }
   };
-  const handleDelete = async row => {
-    if (!confirm(`ลบข้อมูลหน้าร้านวันที่ ${row.date} ?`)) return;
-    try { await api.deleteStorefront(row.rowIndex); invalidate(); }
-    catch(e) { alert("ลบไม่สำเร็จ: " + e.message); }
+  const confirmDelete = async () => {
+    const row = deleting;
+    try { await api.deleteStorefront(row.rowIndex); invalidate(); toast.success("ลบสำเร็จ"); }
+    catch(e) { toast.error("ลบไม่สำเร็จ: " + e.message); }
+    finally { setDeleting(null); }
   };
 
-  if (isLoading) return <div className="loading"/>;
+  if (isLoading) return <div><div className="skeleton sk-hero" /><div className="sk-row"><div className="skeleton sk-card" /><div className="skeleton sk-card" /><div className="skeleton sk-card" /></div><div className="sk-list">{[1,2,3,4].map(i=><div key={i} className="skeleton sk-item" />)}</div></div>;
   if (error)     return <div className="err">❌ {error.message}</div>;
 
   return (
@@ -105,12 +110,21 @@ export default function Storefront() {
               </div>
               <div className="tx-actions">
                 <button className="btn-icon btn-edit" title="แก้ไข" onClick={()=>openEdit(r)}>✏</button>
-                <button className="btn-icon btn-del"  title="ลบ"    onClick={()=>handleDelete(r)}>✕</button>
+                <button className="btn-icon btn-del"  title="ลบ"    onClick={()=>setDeleting(r)}>✕</button>
               </div>
             </div>
           ))
         }
       </div>
+
+      {deleting && (
+        <ConfirmDialog
+          title="ยืนยันการลบ"
+          message={`ลบข้อมูลหน้าร้านวันที่ ${deleting.date} ?`}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleting(null)}
+        />
+      )}
 
       {modal && (
         <Modal title={modal.mode==="add"?"เพิ่มยอดหน้าร้าน":"แก้ไขยอดหน้าร้าน"} onClose={()=>setModal(null)} onSave={handleSave} saving={saving}>
