@@ -13,10 +13,10 @@ const RecordSale = lazy(() => import("./tabs/RecordSale"));
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30 * 1000,          // fresh 30 วิ — กัน rowIndex ค้าง (LINE bot/เครื่องอื่นแทรก-ลบแถวได้ตลอด)
+      staleTime: 60 * 1000,          // fresh 1 นาที — สดพอสำหรับ rowIndex, ไม่ refetch ถี่จน GAS หน่วง
       gcTime:    10 * 60 * 1000,     // เก็บ cache ไว้ 10 นาที
       retry: 1,
-      refetchOnWindowFocus: true,    // กลับมาที่แท็บ → ดึง rowIndex ใหม่ก่อนกดแก้/ลบ
+      refetchOnWindowFocus: false,   // GAS ช้า (cold start) — ไม่ refetch ตอน focus; ใช้ปุ่มรีเฟรช + invalidate หลังแก้แทน
     }
   }
 });
