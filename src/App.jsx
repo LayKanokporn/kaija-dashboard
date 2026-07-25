@@ -8,20 +8,22 @@ import "./App.css";
 const Expense    = lazy(() => import("./tabs/Expense"));
 const Storefront = lazy(() => import("./tabs/Storefront"));
 const Stock      = lazy(() => import("./tabs/Stock"));
+const RecordSale = lazy(() => import("./tabs/RecordSale"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 3 * 60 * 1000,      // data ถือว่า fresh 3 นาที
+      staleTime: 30 * 1000,          // fresh 30 วิ — กัน rowIndex ค้าง (LINE bot/เครื่องอื่นแทรก-ลบแถวได้ตลอด)
       gcTime:    10 * 60 * 1000,     // เก็บ cache ไว้ 10 นาที
       retry: 1,
-      refetchOnWindowFocus: false,   // ไม่ refetch ตอน switch tab browser
+      refetchOnWindowFocus: true,    // กลับมาที่แท็บ → ดึง rowIndex ใหม่ก่อนกดแก้/ลบ
     }
   }
 });
 
 const TABS = [
   { id: "dashboard",  icon: "📊", label: "ภาพรวม" },
+  { id: "record",     icon: "📝", label: "บันทึกยอด" },
   { id: "expense",    icon: "💰", label: "รายรับ-จ่าย" },
   { id: "storefront", icon: "🏪", label: "หน้าร้าน" },
   { id: "stock",      icon: "📦", label: "สต็อก" },
@@ -107,6 +109,7 @@ function AppInner() {
         <div className="page">
           {mounted.has("dashboard")  && <div style={{display: tab==="dashboard"  ? "block":"none"}}><Dashboard /></div>}
           <Suspense fallback={<TabSkeleton />}>
+            {mounted.has("record")     && <div style={{display: tab==="record"     ? "block":"none"}}><RecordSale /></div>}
             {mounted.has("expense")    && <div style={{display: tab==="expense"    ? "block":"none"}}><Expense /></div>}
             {mounted.has("storefront") && <div style={{display: tab==="storefront" ? "block":"none"}}><Storefront /></div>}
             {mounted.has("stock")      && <div style={{display: tab==="stock"      ? "block":"none"}}><Stock /></div>}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, createContext, useContext } from "react";
+import { useState, useMemo, useCallback, createContext, useContext } from "react";
 
 const ToastCtx = createContext(null);
 
@@ -15,18 +15,11 @@ export function ToastProvider({ children }) {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
   }, []);
 
-  const toast = useCallback({
+  const api = useMemo(() => ({
     success: (msg) => push(msg, "success"),
     error:   (msg) => push(msg, "error"),
     info:    (msg) => push(msg, "info"),
-  }, [push]);
-
-  // useCallback doesn't work on object literal — wrap properly
-  const api = {
-    success: (msg) => push(msg, "success"),
-    error:   (msg) => push(msg, "error"),
-    info:    (msg) => push(msg, "info"),
-  };
+  }), [push]);
 
   return (
     <ToastCtx.Provider value={api}>

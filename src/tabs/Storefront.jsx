@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
+import { isoToTH, thToISO, todayISO } from "../dateutil";
 import Modal from "../components/Modal";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { useToast } from "../components/Toast";
 
 const fmt = n => (+(n||0)).toLocaleString();
-const EMPTY_FORM = { txDate:"", cashForward:"0", cashIncome:"0", cashExpense:"0", transferIncome:"0" };
+const EMPTY_FORM = { txDate:"", cashForward:"0", cashIncome:"0", cashExpense:"0", transferIncome:"0", reserveIn:"0", toReserve:"0" };
 
 export default function Storefront() {
   const qc = useQueryClient();
@@ -16,6 +17,7 @@ export default function Storefront() {
   const [form, setForm]       = useState(EMPTY_FORM);
   const [saving, setSaving]   = useState(false);
   const [deleting, setDeleting] = useState(null);
+  const [delBusy, setDelBusy] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['storefront', days],
@@ -34,19 +36,21 @@ export default function Storefront() {
   const totExp      = rows.reduce((s,r)=>s+(r.cashExpense||0),0);
 
   const openAdd = () => {
-    setForm({ ...EMPTY_FORM, txDate: new Date().toLocaleDateString("en-CA") });
+    setForm({ ...EMPTY_FORM, txDate: todayISO() });
     setModal({ mode:"add" });
   };
   const openEdit = row => {
-    setForm({ txDate:row.date, cashForward:String(row.cashForward||0), cashIncome:String(row.cashIncome||0), cashExpense:String(row.cashExpense||0), transferIncome:String(row.transferIncome||0) });
+    setForm({ txDate:thToISO(row.date), cashForward:String(row.cashForward||0), cashIncome:String(row.cashIncome||0), cashExpense:String(row.cashExpense||0), transferIncome:String(row.transferIncome||0), reserveIn:String(row.reserveIn||0), toReserve:String(row.toReserve||0) });
     setModal({ mode:"edit", row });
   };
   const handleSave = async () => {
     setSaving(true);
     const cf = parseFloat(form.cashForward)||0, ci = parseFloat(form.cashIncome)||0;
     const ce = parseFloat(form.cashExpense)||0, ti = parseFloat(form.transferIncome)||0;
+    const ri = parseFloat(form.reserveIn)||0,   tr = parseFloat(form.toReserve)||0;
     try {
-      const p = { txDate:form.txDate, cashForward:cf, cashIncome:ci, cashExpense:ce, transferIncome:ti, cashBalance:cf+ci-ce, totalSales:ci+ti };
+      // ไม่ส่ง cashBalance/totalSales — ให้ GAS คำนวณจาก components (สูตรเดียวกับ LINE + reserve)
+      const p = { txDate:isoToTH(form.txDate), cashForward:cf, cashIncome:ci, cashExpense:ce, transferIncome:ti, reserveIn:ri, toReserve:tr };
       if (modal.mode === "add") { await api.addStorefront(p); toast.success("เพิ่มข้อมูลสำเร็จ"); }
       else { await api.updateStorefront({ ...p, rowIndex:modal.row.rowIndex }); toast.success("แก้ไขสำเร็จ"); }
       setModal(null);
@@ -55,10 +59,12 @@ export default function Storefront() {
     finally { setSaving(false); }
   };
   const confirmDelete = async () => {
+    if (delBusy) return;
     const row = deleting;
+    setDelBusy(true);
     try { await api.deleteStorefront(row.rowIndex); invalidate(); toast.success("ลบสำเร็จ"); }
     catch(e) { toast.error("ลบไม่สำเร็จ: " + e.message); }
-    finally { setDeleting(null); }
+    finally { setDelBusy(false); setDeleting(null); }
   };
 
   if (isLoading) return <div><div className="skeleton sk-hero" /><div className="sk-row"><div className="skeleton sk-card" /><div className="skeleton sk-card" /><div className="skeleton sk-card" /></div><div className="sk-list">{[1,2,3,4].map(i=><div key={i} className="skeleton sk-item" />)}</div></div>;
@@ -121,8 +127,9 @@ export default function Storefront() {
         <ConfirmDialog
           title="ยืนยันการลบ"
           message={`ลบข้อมูลหน้าร้านวันที่ ${deleting.date} ?`}
+          loading={delBusy}
           onConfirm={confirmDelete}
-          onCancel={() => setDeleting(null)}
+          onCancel={() => { if (!delBusy) setDeleting(null); }}
         />
       )}
 
@@ -142,6 +149,15 @@ export default function Storefront() {
           </div>
           <div className="field"><label>รายจ่าย (฿)</label>
             <input type="number" min="0" step="1" value={form.cashExpense} onChange={e=>setForm({...form,cashExpense:e.target.value})} />
+          </div>
+          <div className="field"><label>นำเงินสำรองเติมเข้าหน้าร้าน (฿)</label>
+            <input type="number" min="0" step="1" value={form.reserveIn} onChange={e=>setForm({...form,reserveIn:e.target.value})} />
+          </div>
+          <div className="field"><label>เก็บเข้าบัญชีสำรอง (฿)</label>
+            <input type="number" min="0" step="1" value={form.toReserve} onChange={e=>setForm({...form,toReserve:e.target.value})} />
+          </div>
+          <div className="field" style={{opacity:.7}}><label>เงินสดคงเหลือ (คำนวณอัตโนมัติ)</label>
+            <input type="text" readOnly value={fmt((parseFloat(form.cashForward)||0)+(parseFloat(form.cashIncome)||0)-(parseFloat(form.cashExpense)||0)+(parseFloat(form.reserveIn)||0)-(parseFloat(form.toReserve)||0)) + " ฿"} />
           </div>
         </Modal>
       )}

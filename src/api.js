@@ -34,6 +34,7 @@ export const api = {
   storefront:  (days = 7) => fetchGAS("storefront",  { days }),
   stock:       (days = 7) => fetchGAS("stock",       { days }),
   leaderboard: ()         => fetchGAS("leaderboard"),
+  getPrevBalance: (location = "", date) => fetchGAS("getPrevBalance", date ? { location, date } : { location }),
 
   // EXPENSE WRITE
   addExpense:    (p)          => fetchGAS("addExpense",    p),

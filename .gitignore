@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# GAS backend — วางเองใน Apps Script editor, กัน SPREADSHEET_ID หลุด GitHub
+gas/
+
+# local agent config
+.claude/

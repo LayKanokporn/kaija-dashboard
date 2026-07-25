@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
+import { isoToTH, thToISO, todayISO } from "../dateutil";
 import Modal from "../components/Modal";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { useToast } from "../components/Toast";
@@ -22,6 +23,7 @@ export default function Stock() {
   const [form, setForm]       = useState(EMPTY_FORM);
   const [saving, setSaving]   = useState(false);
   const [deleting, setDeleting] = useState(null);
+  const [delBusy, setDelBusy] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['stock', days],
@@ -40,11 +42,11 @@ export default function Stock() {
   const visible = rows.filter(r=>filter==="all"||r.movementType===filter).slice().reverse();
 
   const openAdd = () => {
-    setForm({ ...EMPTY_FORM, txDate: new Date().toLocaleDateString("en-CA") });
+    setForm({ ...EMPTY_FORM, txDate: todayISO() });
     setModal({ mode:"add" });
   };
   const openEdit = row => {
-    setForm({ txDate:row.date, movementType:row.movementType, itemName:row.itemName||"", qty:String(row.qty||""), unit:row.unit||"", note:row.note||"" });
+    setForm({ txDate:thToISO(row.date), movementType:row.movementType, itemName:row.itemName||"", qty:String(row.qty||""), unit:row.unit||"", note:row.note||"" });
     setModal({ mode:"edit", row });
   };
   const handleSave = async () => {
@@ -52,7 +54,7 @@ export default function Stock() {
     if (!form.qty || isNaN(+form.qty)) { toast.error("กรุณาใส่จำนวน"); return; }
     setSaving(true);
     try {
-      const p = { txDate:form.txDate, movementType:form.movementType, itemName:form.itemName, qty:form.qty, unit:form.unit, note:form.note };
+      const p = { txDate:isoToTH(form.txDate), movementType:form.movementType, itemName:form.itemName, qty:form.qty, unit:form.unit, note:form.note };
       if (modal.mode === "add") { await api.addStock(p); toast.success("เพิ่มรายการสำเร็จ"); }
       else { await api.updateStock({ ...p, rowIndex:modal.row.rowIndex }); toast.success("แก้ไขสำเร็จ"); }
       setModal(null);
@@ -61,10 +63,12 @@ export default function Stock() {
     finally { setSaving(false); }
   };
   const confirmDelete = async () => {
+    if (delBusy) return;
     const row = deleting;
+    setDelBusy(true);
     try { await api.deleteStock(row.rowIndex); invalidate(); toast.success("ลบสำเร็จ"); }
     catch(e) { toast.error("ลบไม่สำเร็จ: " + e.message); }
-    finally { setDeleting(null); }
+    finally { setDelBusy(false); setDeleting(null); }
   };
 
   if (isLoading) return <div><div className="sk-row"><div className="skeleton sk-card" /><div className="skeleton sk-card" /><div className="skeleton sk-card" /></div><div className="sk-list">{[1,2,3,4].map(i=><div key={i} className="skeleton sk-item" />)}</div></div>;
@@ -125,8 +129,9 @@ export default function Stock() {
         <ConfirmDialog
           title="ยืนยันการลบ"
           message={`ลบ "${deleting.itemName}" ${deleting.qty} ${deleting.unit} ?`}
+          loading={delBusy}
           onConfirm={confirmDelete}
-          onCancel={() => setDeleting(null)}
+          onCancel={() => { if (!delBusy) setDeleting(null); }}
         />
       )}
 

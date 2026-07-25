@@ -1,6 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
+import { isoToTH, thToISO, todayISO } from "../dateutil";
 import Modal from "../components/Modal";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { useToast } from "../components/Toast";
@@ -36,6 +37,7 @@ export default function Expense() {
   const [deleting, setDeleting] = useState(null);
   const [expanded, setExpanded] = useState(new Set());
   const [catEdit, setCatEdit]   = useState(null);
+  const [delBusy, setDelBusy]   = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['expense', days],
@@ -56,11 +58,11 @@ export default function Expense() {
   const grouped = useMemo(() => groupByDate(visible), [visible]);
 
   // เปิดวันแรก (ล่าสุด) อัตโนมัติ
-  useMemo(() => {
+  useEffect(() => {
     if (grouped.length > 0 && expanded.size === 0) {
       setExpanded(new Set([grouped[0][0]]));
     }
-  }, [grouped.length]);
+  }, [grouped, expanded.size]);
 
   const toggleDate = (date) => {
     setExpanded(prev => {
@@ -71,22 +73,23 @@ export default function Expense() {
   };
 
   const openAdd = () => {
-    setForm({ ...EMPTY_FORM, txDate: new Date().toLocaleDateString("en-CA") });
+    setForm({ ...EMPTY_FORM, txDate: todayISO() });
     setModal({ mode:"add" });
   };
   const openEdit = row => {
-    setForm({ txDate:row.date, type:row.type, category:row.category, itemName:row.itemName||"", amount:String(row.amount), note:row.note||"" });
+    setForm({ txDate:thToISO(row.date), type:row.type, category:row.category, itemName:row.itemName||"", amount:String(row.amount), note:row.note||"" });
     setModal({ mode:"edit", row });
   };
   const handleSave = async () => {
     if (!form.amount || isNaN(+form.amount)) { toast.error("กรุณาใส่จำนวนเงิน"); return; }
+    const txDate = isoToTH(form.txDate);   // ส่ง GAS เป็น dd/mm/yyyy เสมอ
     setSaving(true);
     try {
       if (modal.mode === "add") {
-        await api.addExpense({ txDate:form.txDate, type:form.type, category:form.category, itemName:form.itemName||form.category, amount:form.amount, note:form.note });
+        await api.addExpense({ txDate, type:form.type, category:form.category, itemName:form.itemName||form.category, amount:form.amount, note:form.note });
         toast.success("เพิ่มรายการสำเร็จ");
       } else {
-        await api.updateExpense({ rowIndex:modal.row.rowIndex, txDate:form.txDate, type:form.type, category:form.category, itemName:form.itemName, amount:form.amount, note:form.note });
+        await api.updateExpense({ rowIndex:modal.row.rowIndex, txDate, type:form.type, category:form.category, itemName:form.itemName, amount:form.amount, note:form.note });
         toast.success("แก้ไขสำเร็จ");
       }
       setModal(null);
@@ -95,10 +98,12 @@ export default function Expense() {
     finally { setSaving(false); }
   };
   const confirmDelete = async () => {
+    if (delBusy) return;                    // กันกดซ้ำ → ลบแถวข้างเคียง (rowIndex เลื่อน)
     const row = deleting;
+    setDelBusy(true);
     try { await api.deleteExpense(row.rowIndex); invalidate(); toast.success("ลบสำเร็จ"); }
     catch(e) { toast.error("ลบไม่สำเร็จ: " + e.message); }
-    finally { setDeleting(null); }
+    finally { setDelBusy(false); setDeleting(null); }
   };
   const handleCatChange = async (row, newCat) => {
     setCatEdit(null);
@@ -206,8 +211,9 @@ export default function Expense() {
         <ConfirmDialog
           title="ยืนยันการลบ"
           message={`ลบ "${deleting.itemName||deleting.category}" ${fmt(deleting.amount)} ฿ ?`}
+          loading={delBusy}
           onConfirm={confirmDelete}
-          onCancel={() => setDeleting(null)}
+          onCancel={() => { if (!delBusy) setDeleting(null); }}
         />
       )}
 

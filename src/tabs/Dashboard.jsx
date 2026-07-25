@@ -1,17 +1,13 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
+import { todayTH } from "../dateutil";
 import { useToast } from "../components/Toast";
 
 const RANKS  = ["🥇","🥈","🥉","4️⃣","5️⃣"];
 const WD     = ["อา","จ","อ","พ","พฤ","ศ","ส"];
 const MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 const fmt = n => (+(n||0)).toLocaleString();
-
-function todayStr() {
-  const d = new Date();
-  return `${d.getDate()}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
-}
 
 function buildCal(expRows, sfRows, stkRows) {
   const now = new Date();
@@ -21,22 +17,28 @@ function buildCal(expRows, sfRows, stkRows) {
   const map   = {};
 
   const ensure = d => { if (!map[d]) map[d] = { e:0, i:0, sf:0, stk:0 }; };
+  // dd/mm/yyyy → คืน day เฉพาะเมื่ออยู่ในเดือน/ปีของปฏิทินที่แสดง (กันข้อมูลเดือนก่อนปนช่องเดียวกัน)
+  const dayInMonth = r => {
+    if (!r.date) return null;
+    const p = String(r.date).split("/");
+    if (p.length < 3) return null;
+    if (parseInt(p[1],10) !== m + 1 || parseInt(p[2],10) !== y) return null;
+    return parseInt(p[0], 10);
+  };
 
   (expRows||[]).forEach(r => {
-    if (!r.date) return;
-    const d = parseInt(r.date.split("/")[0], 10);
+    const d = dayInMonth(r); if (d === null) return;
     ensure(d);
-    r.type==="EXPENSE" ? (map[d].e += r.amount) : (map[d].i += r.amount);
+    if (r.type === "EXPENSE") map[d].e += r.amount;
+    else if (r.type === "INCOME") map[d].i += r.amount;   // CARRY/อื่นๆ ไม่นับ
   });
   (sfRows||[]).forEach(r => {
-    if (!r.date) return;
-    const d = parseInt(r.date.split("/")[0], 10);
+    const d = dayInMonth(r); if (d === null) return;
     ensure(d);
     map[d].sf += (r.totalSales || r.cashIncome || 0);
   });
   (stkRows||[]).forEach(r => {
-    if (!r.date) return;
-    const d = parseInt(r.date.split("/")[0], 10);
+    const d = dayInMonth(r); if (d === null) return;
     ensure(d);
     map[d].stk += 1;
   });
@@ -110,7 +112,7 @@ export default function Dashboard() {
   const { storefront:sf, daily:dl, stock:stk } = dash;
 
   // คำนวณจาก expense rows จริงถ้า Daily Summary ยังไม่มี
-  const td = todayStr();
+  const td = todayTH();
   const todayExp = expRows.filter(r => r.date === td);
   const computedIncome  = todayExp.filter(r=>r.type==="INCOME").reduce((s,r)=>s+r.amount, 0);
   const computedExpense = todayExp.filter(r=>r.type==="EXPENSE").reduce((s,r)=>s+r.amount, 0);
@@ -123,10 +125,6 @@ export default function Dashboard() {
   const allIncome  = expRows.filter(r=>r.type==="INCOME").reduce((s,r)=>s+r.amount,0);
   const allExpense = expRows.filter(r=>r.type==="EXPENSE").reduce((s,r)=>s+r.amount,0);
   const allNet = allIncome - allExpense;
-
-  // storefront: ใช้ totalSales จาก sf หรือคำนวณจาก sfRows
-  const sfTotalSales = sf.totalSales || sfRows.reduce((s,r)=>s+(r.totalSales||0),0) / Math.max(sfRows.length,1) || 0;
-  const sfCashBalance = sf.cashBalance || (sfRows.length > 0 ? sfRows[sfRows.length-1].cashBalance || 0 : 0);
 
   const { cells, map, today, month } = buildCal(expRows, sfRows, stkRows);
   const recent = expRows.slice(-6).reverse();
@@ -262,8 +260,8 @@ export default function Dashboard() {
                   {r.name} {r.uid && <span style={{fontSize:10,opacity:0.5}}>✏</span>}
                 </span>
               )}
-              <span className="lb-pts">{r.points.toLocaleString()} pt</span>
-              <span className="lb-medal">{r.medals}🏅</span>
+              <span className="lb-pts">{(+(r.points||0)).toLocaleString()} pt</span>
+              <span className="lb-medal">{r.medals||0}🏅</span>
             </div>
           ))
         }
